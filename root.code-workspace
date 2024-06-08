@@ -21,13 +21,16 @@
     "[typescriptreact]": {
       "editor.defaultFormatter": "biomejs.biome"
     },
+    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",
     "editor.formatOnSave": true,
     "editor.tabSize": 2,
     "mypy.enabled": false,
     "git.openDiffOnClick": true,
+    "python.analysis.autoImportCompletions": true,
     "python.analysis.typeCheckingMode": "strict",
+    "python.testing.pytestEnabled": true,
     "rust-analyzer.procMacro.ignored": {
       "napi-derive": [
         "napi"
@@ -55,7 +58,6 @@
       "titleBar.activeBackground": "#8B0002",
       "titleBar.activeForeground": "#FFFBFB"
     },
-    "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
   },
   "extensions": {
     "recommendations": [

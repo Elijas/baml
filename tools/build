@@ -126,7 +126,8 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="wasm-pack test --chrome . --features=wasm"
       #command="wasm-pack test --node . --features=wasm"
-      command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
+      #command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
+      command="cargo test --features=internal schema -- --nocapture"
     else
       command="cargo build --features=wasm --target=wasm32-unknown-unknown"
     fi
@@ -136,7 +137,7 @@ case "$_path" in
       npx nodemon \
         --ext rs,hb,hbs,j2,toml,baml \
         --watch "${_repo_root}/engine" \
-        --ignore 'target' \
+        --ignore 'target/**' \
         --exec "${command}"
     else
       eval "${command}"
@@ -314,6 +315,19 @@ case "$_path" in
         --exec 'pnpm build; date'
     else
       pnpm build
+      date
+    fi
+    ;;
+
+  */.sandbox/instructor-demo | /.sandbox/instructor-demo/* )
+    command="OPENAI_LOG=debug poetry run python demo.py; date"
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext py \
+        --watch . \
+        --exec "${command}" 
+    else
+      eval "${command}"
       date
     fi
     ;;

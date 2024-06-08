@@ -17,6 +17,7 @@ mod macros;
 mod request;
 mod runtime;
 pub mod runtime_interface;
+pub mod schema;
 pub mod tracing;
 pub mod type_builder;
 mod types;

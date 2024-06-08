@@ -68,10 +68,10 @@ impl<T> Default for RenderSetting<T> {
 }
 
 pub struct RenderOptions {
-    pub prefix: RenderSetting<String>,
-    pub or_splitter: String,
-    pub enum_value_prefix: RenderSetting<String>,
-    pub always_hoist_enums: RenderSetting<bool>,
+    prefix: RenderSetting<String>,
+    or_splitter: String,
+    enum_value_prefix: RenderSetting<String>,
+    always_hoist_enums: RenderSetting<bool>,
 }
 
 impl Default for RenderOptions {
