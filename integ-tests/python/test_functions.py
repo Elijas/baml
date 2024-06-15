@@ -4,7 +4,7 @@ load_dotenv()
 import baml_py
 from baml_client import b
 from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-from baml_client.tracing import trace, set_tags, flush
+from baml_client.tracing import trace, set_tags, flush, on_log_event
 from baml_client.type_builder import TypeBuilder
 import datetime
 
@@ -384,3 +384,14 @@ async def test_nested_class_streaming():
 
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     print("final ", final.model_dump(mode='json'))
+
+@pytest.mark.asyncio
+async def test_event_log_hook():
+    def event_log_hook(event):
+        print("Event log hook1: ")
+        print("Event log event ", event)
+
+    on_log_event(event_log_hook)
+    res = await b.TestFnNamedArgsSingleBool(True)
+    assert res == "true"
+    
