@@ -402,6 +402,7 @@ pub(crate) mod tests {
             context_transfers: Vec::new(),
             argv: Arc::from([]),
             pending_call_trace: None,
+            entry_trace: None,
             root_context: btel_types::context::Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -1566,6 +1567,7 @@ pub struct BexVm {
     /// re-enter the VM (via `YieldToCall`) therefore see their own type-args
     /// even if the inner callback uses different ones.
     pending_call_trace: Option<CallTrace>,
+    entry_trace: Option<crate::telemetry::TraceConfig>,
     root_context: Context,
     pending_call_type_args: Vec<bex_vm_types::RealizedTy>,
     pending_call_type_values: Vec<Option<TypeValue>>,
@@ -2109,6 +2111,7 @@ impl BexVm {
             context_transfers: Vec::new(),
             argv,
             pending_call_trace: None,
+            entry_trace: None,
             root_context: Context::default(),
             pending_call_type_args: Vec::new(),
             pending_call_type_values: Vec::new(),
@@ -2164,7 +2167,7 @@ impl BexVm {
         }))
     }
 
-    pub(crate) fn current_context(&self) -> &Context {
+    pub fn current_context(&self) -> &Context {
         self.frames
             .iter()
             .rev()
@@ -2181,6 +2184,32 @@ impl BexVm {
             "root context must precede invocation entry"
         );
         self.root_context = context;
+    }
+
+    pub fn invocation_ancestry(&self) -> Option<crate::telemetry::ThreadSpawnContext> {
+        self.telemetry
+            .as_ref()
+            .map(TelemetryState::hidden_spawn_context)
+    }
+
+    pub fn set_invocation_ancestry(&mut self, context: &crate::telemetry::ThreadSpawnContext) {
+        if let Some(telemetry) = &mut self.telemetry {
+            telemetry.configure_spawn(context);
+        }
+    }
+
+    pub fn set_entry_trace(
+        &mut self,
+        options: &bex_vm_types::trace::TraceOptionsData,
+        reserved_id: Option<btel_types::TelemetryId>,
+    ) {
+        self.entry_trace = Some(crate::telemetry::TraceConfig {
+            mode: options.mode,
+            inputs: options.inputs,
+            output: options.output,
+            error: options.error,
+            reserved_id,
+        });
     }
 
     fn decode_log_event(
@@ -4123,13 +4152,14 @@ impl BexVm {
                     };
                     // SAFETY: arguments and callable remain live under the heap permit.
                     self.telemetry.as_mut().and_then(|telemetry| unsafe {
-                        telemetry.enter_bytecode(
+                        telemetry.enter_bytecode_with_trace(
                             function_ref,
                             function_identity,
                             None,
                             0,
                             false,
                             args,
+                            self.entry_trace.take(),
                             |caller, callee| {
                                 Self::register_call_path_functions(&self.heap, caller, callee)
                             },
@@ -4310,7 +4340,32 @@ impl BexVm {
 
             runtime_package: HeapPtr::null(),
         };
-        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
+        let explicit_trace = self.entry_trace.is_some();
+        let entry_ptr = if explicit_trace {
+            self.tlab
+                .alloc_function(Box::new(entry_function))
+                .expect("entry telemetry function identity")
+        } else {
+            self.tlab.alloc(Object::Function(Box::new(entry_function)))
+        };
+        let frame_telemetry = self.entry_trace.take().and_then(|trace| {
+            // SAFETY: the entry and arguments are live under the active permit.
+            let Object::Function(function) = (unsafe { entry_ptr.get() }) else {
+                unreachable!()
+            };
+            self.telemetry.as_mut().and_then(|telemetry| unsafe {
+                telemetry.enter_bytecode_with_trace(
+                    function,
+                    entry_ptr,
+                    None,
+                    0,
+                    false,
+                    args,
+                    Some(trace),
+                    |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+                )
+            })
+        });
 
         // Synthetic `$entry::` wrapper frame; the wrapped native/sysop emits
         // its own pair through the normal Call/SysOp instruction paths.
@@ -4321,7 +4376,7 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
-            telemetry: None,
+            telemetry: frame_telemetry,
             context: self.root_context.clone(),
         }));
     }
@@ -4392,7 +4447,32 @@ impl BexVm {
 
             runtime_package: HeapPtr::null(),
         };
-        let entry_ptr = self.tlab.alloc(Object::Function(Box::new(entry_function)));
+        let explicit_trace = self.entry_trace.is_some();
+        let entry_ptr = if explicit_trace {
+            self.tlab
+                .alloc_function(Box::new(entry_function))
+                .expect("entry telemetry function identity")
+        } else {
+            self.tlab.alloc(Object::Function(Box::new(entry_function)))
+        };
+        let frame_telemetry = self.entry_trace.take().and_then(|trace| {
+            // SAFETY: the entry and arguments are live under the active permit.
+            let Object::Function(function) = (unsafe { entry_ptr.get() }) else {
+                unreachable!()
+            };
+            self.telemetry.as_mut().and_then(|telemetry| unsafe {
+                telemetry.enter_bytecode_with_trace(
+                    function,
+                    entry_ptr,
+                    None,
+                    0,
+                    false,
+                    args,
+                    Some(trace),
+                    |caller, callee| Self::register_call_path_functions(&self.heap, caller, callee),
+                )
+            })
+        });
         self.frames.push(Frame::Bytecode(BytecodeFrame {
             function: entry_ptr,
             instruction_ptr: 0,
@@ -4400,7 +4480,7 @@ impl BexVm {
             type_args: Vec::new(),
             type_metadata: None,
             faulting_pc: 0,
-            telemetry: None,
+            telemetry: frame_telemetry,
             context: self.root_context.clone(),
         }));
     }
