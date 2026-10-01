@@ -56,7 +56,7 @@ function supabase_send(method: string, path: string, body: string, prefer: strin
     };
     let res = baml.http.send(
         baml.http.Request { method: method, url: url, headers: headers, body: body },
-        timeout = baml.time.Duration.from_seconds(30),
+        options = baml.http.RequestOptions.from_request_timeout(baml.time.Duration.from_seconds(30)),
     ) catch (e) {
         _ => {
             throw StoreError { message: method + " failed for " + url };

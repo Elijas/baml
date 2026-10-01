@@ -384,7 +384,10 @@ function skill_timeout() -> baml.time.Duration {
 
 /// The skill, or an empty string if it could not be fetched.
 function fetch_skill() -> string {
-    let response = baml.http.fetch(skill_url(), timeout = skill_timeout()) catch_all (_) {
+    let response = baml.http.fetch(
+        skill_url(),
+        options = baml.http.RequestOptions.from_request_timeout(skill_timeout()),
+    ) catch_all (_) {
         _ => {
             return "";
         },

@@ -469,7 +469,7 @@ function supabase_get(query: string) -> string {
             headers: { "apikey": key, "Authorization": "Bearer " + key, "Accept": "application/json" },
             body: "",
         },
-        timeout = baml.time.Duration.from_seconds(30),
+        options = baml.http.RequestOptions.from_request_timeout(baml.time.Duration.from_seconds(30)),
     ) catch (e) {
         _ => baml.sys.panic("supabase: request failed for " + url),
     };

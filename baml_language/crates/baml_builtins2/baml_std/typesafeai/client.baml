@@ -7,8 +7,7 @@ class Client {
     model: string,
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    request_timeout_ms: int?,
-    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    /// Shared native HTTP deadlines. Null/non-positive values are unbounded.
     options: baml.ai.LlmClientOptions,
     capture_wire: bool,
 
@@ -18,7 +17,6 @@ class Client {
         model: string = "jev-latest",
         api_key: ai.Credential? = env.TYPESAFE_API_KEY,
         base_url: ai.Credential? = "https://api.typesafe.ai/v1",
-        request_timeout_ms: int? = null,
         capture_wire: bool = true,
         options: baml.ai.LlmClientOptions? = null,
     ) -> Client {
@@ -26,7 +24,6 @@ class Client {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
             capture_wire: capture_wire,
             options: options ?? baml.ai.LlmClientOptions.new(),
         }

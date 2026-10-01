@@ -907,9 +907,10 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
         "anthropic",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
-        request_timeout = c.options.request_timeout,
-        connect_timeout = c.options.connect_timeout,
+        options = baml.http.RequestOptions {
+            request_timeout: c.options.request_timeout,
+            connect_timeout: c.options.connect_timeout,
+        },
     );
     let turn = parse(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
@@ -1138,10 +1139,12 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                             args_json: "",
                                         },
                                     );
+                                    out.push(ai.stream.ContentSeen {});
                                     null
                                 },
                                 "thinking" => {
                                     state.thinking = `${state.thinking}${block.thinking ?? ""}`;
+                                    out.push(ai.stream.ContentSeen {});
                                     null
                                 },
                                 _ => {
@@ -1174,12 +1177,14 @@ function decode_batch(batch: string, state: AnthStreamState) -> ai.stream.Event[
                                     if let call: AnthStreamToolCall = _anth_stream_call_at(state, event.index) {
                                         call.args_json = `${call.args_json}${d.partial_json ?? ""}`;
                                     }
+                                    out.push(ai.stream.ContentSeen {});
                                     null
                                 },
                                 "thinking_delta" => {
                                     // Deliberately NOT a TextDelta: thinking is not part
                                     // of the answer the parser will see.
                                     state.thinking = `${state.thinking}${d.thinking ?? ""}`;
+                                    out.push(ai.stream.ContentSeen {});
                                     null
                                 },
                                 "signature_delta" => {
@@ -1285,14 +1290,10 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
     let sse = baml.http.fetch_sse(
         req,
         idle_timeout = c.options.idle_timeout,
-        first_event_timeout = c.options.time_to_first_token_timeout
-            ?? baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(
-                c.options.request_timeout
-                    ?? baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
-            )
-            .with_connect_timeout(c.options.connect_timeout),
+        options = baml.http.RequestOptions {
+            request_timeout: c.options.request_timeout,
+            connect_timeout: c.options.connect_timeout,
+        },
     ) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
         baml.errors.Timeout => _stream_open_failure(e),
@@ -1312,6 +1313,8 @@ function invoke_stream(c: root.Client, input: ai.ModelTurnInput) -> ai.stream.Tu
         },
         require_terminal = "anthropic",
         model = c.model,
+        time_to_first_token_timeout = c.options.time_to_first_token_timeout
+            ?? baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

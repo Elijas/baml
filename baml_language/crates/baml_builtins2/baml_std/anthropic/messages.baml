@@ -78,10 +78,9 @@ class Client {
     // and a `Ref` keeps the secret out of the client value entirely.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // Native request deadline, including a streaming response body. Null or a
-    // non-positive value is unbounded; browser/Wasm does not enforce it.
-    request_timeout_ms: int?,
-    // Native streaming deadline from SSE open until the first parsed event.
+    // Streaming deadline from SSE open until the first event carrying message
+    // content (text, reasoning, or a tool call); protocol preamble events do
+    // not count. Null or a non-positive value is unbounded.
     time_to_first_token_timeout_ms: int?,
 
     // First-class typed parameters. Each is lowered into the typed request
@@ -107,7 +106,8 @@ class Client {
     // Extra URL query parameters, appended verbatim (no percent-encoding —
     // there is no encoder in the stdlib yet; keep values URL-safe).
     query_params: map<string, string>?,
-    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    /// Shared native HTTP deadlines; `time_to_first_token_timeout` overrides the legacy
+    /// `time_to_first_token_timeout_ms` field.
     options: baml.ai.LlmClientOptions,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
@@ -125,7 +125,6 @@ class Client {
         model: string = "claude-haiku-4-5",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        request_timeout_ms: int? = null,
         time_to_first_token_timeout_ms: int? = null,
         max_tokens: int = 8192,
         temperature: float? = null,
@@ -144,7 +143,6 @@ class Client {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
             time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             max_tokens: max_tokens,
             temperature: temperature,

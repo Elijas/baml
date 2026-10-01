@@ -1022,9 +1022,10 @@ function invoke(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.ModelTu
         "openai",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
-        request_timeout = c.options.request_timeout,
-        connect_timeout = c.options.connect_timeout,
+        options = baml.http.RequestOptions {
+            request_timeout: c.options.request_timeout,
+            connect_timeout: c.options.connect_timeout,
+        },
     );
     let turn = parse(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
@@ -1160,6 +1161,15 @@ function _stream_events(
                 let key = _event_key(event);
                 let _ = state.call_arguments.set(key, (state.call_arguments.get(key) ?? "") + delta);
             };
+            out.push(ai.stream.ContentSeen {});
+            null
+        },
+        // Reasoning and refusal text: message content with no TextDelta.
+        "response.reasoning_summary_text.delta"
+            | "response.reasoning_text.delta"
+            | "response.refusal.delta" =>
+        {
+            out.push(ai.stream.ContentSeen {});
             null
         },
         "response.function_call_arguments.done" => {
@@ -1257,14 +1267,10 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
     let sse = baml.http.fetch_sse(
         req,
         idle_timeout = c.options.idle_timeout,
-        first_event_timeout = c.options.time_to_first_token_timeout
-            ?? baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(
-                c.options.request_timeout
-                    ?? baml.time.Duration.from_milliseconds(c.request_timeout_ms ?? 0),
-            )
-            .with_connect_timeout(c.options.connect_timeout),
+        options = baml.http.RequestOptions {
+            request_timeout: c.options.request_timeout,
+            connect_timeout: c.options.connect_timeout,
+        },
     ) catch_all (e) {
         _ => _stream_open_failure(e),
     };
@@ -1284,6 +1290,8 @@ function invoke_stream(c: root.ResponsesClient, input: ai.ModelTurnInput) -> ai.
         },
         require_terminal = "openai",
         model = c.model,
+        time_to_first_token_timeout = c.options.time_to_first_token_timeout
+            ?? baml.time.Duration.from_milliseconds(c.time_to_first_token_timeout_ms ?? 0),
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

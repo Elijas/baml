@@ -127,7 +127,7 @@ function _resolve_media_content(
         // become a typed, classified NetworkFailure.
         let response = baml.http.fetch(
             media_url,
-            options = baml.http.RequestOptions.new().with_request_timeout(baml.time.Duration.from_seconds(30)),
+            options = baml.http.RequestOptions.from_request_timeout(baml.time.Duration.from_seconds(30)),
         ) catch_all (e) {
             let timeout: baml.errors.Timeout => throw timeout,
             _ => {

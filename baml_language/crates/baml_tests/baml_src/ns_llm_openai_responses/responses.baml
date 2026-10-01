@@ -194,7 +194,7 @@ test "oai_request_shape" {
     assert.is_true(!got.includes(`"stream"`))
 }
 
-function oai_request_timeout_ms() -> string {
+function oai_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_oai_text_response())],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -202,20 +202,20 @@ function oai_request_timeout_ms() -> string {
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(20) },
             );
             let outcome = `turn:${cl.invoke(_oai_input(OaiEcho@spec("Say pong."), ai.Journal { log: [] }, ai.tools.Toolbox.new([]))).terminal_text() ?? ""}` catch_all (e) {
                 let timeout: baml.errors.Timeout => "Timeout",
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${cl.options.request_timeout?.to_milliseconds() ?? -1n}|${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "oai_request_timeout_ms" {
-    assert.equal(oai_request_timeout_ms(), "20|Timeout")
+test "oai_request_timeout" {
+    assert.equal(oai_request_timeout(), "20|Timeout")
 }
 
 // request_body deep-merges over the serialized typed request: a scalar
@@ -645,7 +645,7 @@ function oai_stream_time_to_first_token_timeout_ms() -> string {
                 model = "gpt-4o-mini",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(15000) },
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = _oai_stream_final(cl) catch_all (e) {
@@ -924,7 +924,8 @@ function oai_stream_decoder_buffers() -> string {
 }
 
 test "oai_stream_decoder_buffers" {
-    assert.equal(oai_stream_decoder_buffers(), "{\"city\":\"paris\"}|0|1|hello|unset")
+    // the two argument deltas yield no text, only a ContentSeen each
+    assert.equal(oai_stream_decoder_buffers(), "{\"city\":\"paris\"}|2|1|hello|unset")
 }
 
 // The dedup key is the CONTENT PART, not the item: a message with two text

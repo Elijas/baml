@@ -97,10 +97,19 @@ class TurnMeta {
 class TurnDone {
 }
 
+/// Message content that is not assistant text: a reasoning or tool-call
+/// delta. There is nothing to deliver to the caller, but the model has started
+/// producing output, which is what ends the time-to-first-token budget. A
+/// decoder yields it for every content-bearing event that produces no
+/// TextDelta; protocol events that carry no content (`message_start`,
+/// `response.created`, pings, usage-only frames) yield nothing.
+class ContentSeen {
+}
+
 /// One provider-agnostic event decoded from an SSE batch: a piece of
-/// assistant text, the turn metadata that arrived alongside it, or the
-/// provider's end-of-turn marker.
-type Event = TextDelta | TurnMeta | TurnDone;
+/// assistant text, non-text message content, the turn metadata that arrived
+/// alongside it, or the provider's end-of-turn marker.
+type Event = TextDelta | ContentSeen | TurnMeta | TurnDone;
 
 /// The single end-of-stream marker returned by both raw turn streams and typed
 /// function streams. A nominal sentinel is required because null may itself be
@@ -160,6 +169,12 @@ class TurnStream {
     // TTFT base: stamped when the SSE response opened (legacy TTFT semantics);
     // falls back to _call_started when a provider did not set it.
     _ttft_from: baml.time.Instant?,
+    // Time-to-first-token budget: how long after `from_sse` (the SSE response
+    // has just opened) the first event carrying message content may take.
+    // `_ttft_limit` is null when there is no budget, and is cleared once a
+    // TextDelta or ContentSeen is delivered.
+    _ttft_limit: baml.time.Duration?,
+    _ttft_opened: baml.time.Instant?,
     _capture_sse: bool,
     // Where this stream's token usage is recorded: the span or thread that
     // opened it, not whoever pulls it. 0 records nothing (scripted streams,
@@ -183,12 +198,30 @@ class TurnStream {
     ///
     /// `model` is the model the request names; the stream's token usage is
     /// recorded under it.
+    ///
+    /// `time_to_first_token_timeout` bounds how long the first event carrying
+    /// MESSAGE CONTENT may take, measured from this call (the SSE response has
+    /// just opened). An event counts only if `decode` yields a TextDelta or a
+    /// ContentSeen for it, so a protocol preamble (`message_start`,
+    /// `response.created`, a ping) does not satisfy the budget. `next()` throws
+    /// `baml.errors.Timeout` when it elapses. Null/non-positive is unbounded.
     function from_sse(
         sse: baml.http.SseStream,
         decode: (string) -> Event[] throws root.errors.InvokeError,
         require_terminal: string? = null,
         model: string? = null,
+        time_to_first_token_timeout: baml.time.Duration? = null,
     ) -> TurnStream {
+        let ttft_limit: baml.time.Duration? = match (time_to_first_token_timeout) {
+            null => null,
+            let limit: baml.time.Duration => {
+                if (limit.to_nanoseconds() > 0n) {
+                    limit
+                } else {
+                    null
+                }
+            },
+        };
         TurnStream {
             _event_source: null,
             _sse: sse,
@@ -208,6 +241,8 @@ class TurnStream {
             _wire_call: null,
             _call_started: null,
             _ttft_from: null,
+            _ttft_limit: ttft_limit,
+            _ttft_opened: baml.time.Instant.now(),
             _capture_sse: false,
             _usage_target: trace._usage_target(),
             _usage_model: model,
@@ -283,6 +318,47 @@ class TurnStream {
                     call.timing.ttft_ms = base.elapsed().to_milliseconds();
                 }
             }
+        }
+    }
+
+    /// (internal) The wire pull while the time-to-first-token budget is still
+    /// open: `sse.next()` bounded by what is left of `limit`. The budget is
+    /// only cleared by `next()` once content is decoded, so a batch of
+    /// content-free events comes back here for another bounded pull.
+    function _next_before_first_token(
+        self,
+        sse: baml.http.SseStream,
+        limit: baml.time.Duration,
+    ) -> string? {
+        let opened = self._ttft_opened ?? baml.time.Instant.now();
+        let remaining = limit.sub(opened.elapsed());
+        if (remaining.to_nanoseconds() > 0n) {
+            return baml.future.with_timeout(remaining, () -> {
+                sse.next()
+            }) catch (e) {
+                baml.errors.Timeout => {
+                    // A transport deadline (request or idle) can also end the
+                    // pull; that one is not ours to relabel.
+                    if (opened.elapsed().to_nanoseconds() < limit.to_nanoseconds()) {
+                        throw e;
+                    }
+                    self._ttft_expired(limit)
+                },
+            };
+        }
+        self._ttft_expired(limit)
+    }
+
+    /// (internal) Ends the stream with the time-to-first-token timeout.
+    function _ttft_expired(self, limit: baml.time.Duration) -> never throws baml.errors.Timeout {
+        self._finish();
+        let limit_ms = limit.to_milliseconds();
+        let reported = limit_ms.to_int() catch (conversion) {
+            baml.errors.InvalidArgument => null,
+        };
+        throw baml.errors.Timeout {
+            message: `no message content arrived within ${limit_ms}ms of the stream opening (time to first token)`,
+            duration_ms: reported,
         }
     }
 
@@ -380,8 +456,14 @@ class TurnStream {
                 match (e) {
                     let d: TextDelta => {
                         self._stamp_first_delta();
+                        self._ttft_limit = null;
                         self._text = `${self._text}${d.text}`;
                         ready.push(d.text);
+                        null
+                    },
+                    let seen: ContentSeen => {
+                        self._stamp_first_delta();
+                        self._ttft_limit = null;
                         null
                     },
                     let m: TurnMeta => {
@@ -428,7 +510,11 @@ class TurnStream {
             }
             match (self._sse) {
                 let sse: baml.http.SseStream => {
-                    match (sse.next()) {
+                    let pulled = match (self._ttft_limit) {
+                        null => sse.next(),
+                        let limit: baml.time.Duration => self._next_before_first_token(sse, limit),
+                    };
+                    match (pulled) {
                         null => {
                             // end of connection. On a strict stream with no
                             // TurnDone decoded this is a truncated turn, and

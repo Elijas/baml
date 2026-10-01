@@ -162,27 +162,27 @@ test "chat_openai_request_shape" {
     )
 }
 
-function chat_request_timeout_ms() -> string {
+function chat_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(20) },
             );
             let outcome = `turn:${cl.invoke(_chat_input("hi")).terminal_text() ?? ""}` catch_all (e) {
                 let timeout: baml.errors.Timeout => "Timeout",
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${cl.options.request_timeout?.to_milliseconds() ?? -1n}|${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "chat_request_timeout_ms" {
-    assert.equal(chat_request_timeout_ms(), "20|Timeout")
+test "chat_request_timeout" {
+    assert.equal(chat_request_timeout(), "20|Timeout")
 }
 
 // The prompt text itself survives role splitting.
@@ -539,27 +539,27 @@ test "issue_4589_responses_preserves_omitted_nested_optional_class" {
     )
 }
 
-function chat_generic_request_timeout_ms() -> string {
+function chat_generic_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(_chat_ok_body())],
         (mock: root.llm_mock.MockJsonServer) -> {
             let cl = openai.GenericClient.new(
                 model = "qwen3",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(20) },
             );
             let outcome = `turn:${cl.invoke(_chat_input("hi")).terminal_text() ?? ""}` catch_all (e) {
                 let timeout: baml.errors.Timeout => "Timeout",
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${cl.options.request_timeout?.to_milliseconds() ?? -1n}|${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "chat_generic_request_timeout_ms" {
-    assert.equal(chat_generic_request_timeout_ms(), "20|Timeout")
+test "chat_generic_request_timeout" {
+    assert.equal(chat_generic_request_timeout(), "20|Timeout")
 }
 
 // An unset base_url is a hard error, not a silent fallback to api.openai.com.
@@ -1025,7 +1025,7 @@ function chat_stream_total_timeout_after_delta() -> string {
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 10000,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(10000) },
             );
             let stream = cl.invoke_stream(_chat_input("hi"));
             let first = match (stream.next()) {
@@ -1036,7 +1036,7 @@ function chat_stream_total_timeout_after_delta() -> string {
                 let timeout: baml.errors.Timeout => "Timeout",
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${first}|${outcome}`
+            `${cl.options.request_timeout?.to_milliseconds() ?? -1n}|${first}|${outcome}`
         },
         chunk_delay_ms = 60000,
     )
@@ -1061,7 +1061,7 @@ function chat_stream_heartbeat_does_not_clear_ttft() -> string {
             let cl = openai.ChatClient.new(
                 api_key = "k",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(15000) },
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {
@@ -1111,7 +1111,7 @@ function chat_generic_stream_time_to_first_token_timeout_ms() -> string {
             let cl = openai.GenericClient.new(
                 model = "qwen3",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(15000) },
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = `${cl.invoke_stream(_chat_input("hi")).final_turn().terminal_text() ?? ""}` catch_all (e) {

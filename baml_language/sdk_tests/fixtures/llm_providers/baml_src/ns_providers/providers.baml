@@ -109,7 +109,9 @@ function mantle(model: string, effort: string, slow: bool, cache: baml.json.json
     store = false,
     // v0 `prompt_cache_key` / `prompt_cache_options` have no typed field.
     request_body = cache,
-    request_timeout_ms = if (slow) { 120000 } else { 10000 },
+    options = baml.ai.LlmClientOptions {
+      request_timeout: baml.time.Duration.from_milliseconds(if (slow) { 120000 } else { 10000 }),
+    },
     time_to_first_token_timeout_ms = if (slow) { 30000 } else { 4000 },
   )
 }
@@ -125,7 +127,7 @@ function azure(model: string, effort: string, request_ms: int, ttft_ms: int) -> 
     headers = { "api-key": key },
     reasoning_effort = effort,
     store = false,
-    request_timeout_ms = request_ms,
+    options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(request_ms) },
     time_to_first_token_timeout_ms = ttft_ms,
   )
 }

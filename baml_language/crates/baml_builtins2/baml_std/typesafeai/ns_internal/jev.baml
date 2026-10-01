@@ -380,9 +380,10 @@ function invoke(c: root.Client, input: ai.ModelTurnInput) -> ai.ModelTurn {
         "typesafeai",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout_ms = c.request_timeout_ms,
-        request_timeout = c.options.request_timeout,
-        connect_timeout = c.options.connect_timeout,
+        options = baml.http.RequestOptions {
+            request_timeout: c.options.request_timeout,
+            connect_timeout: c.options.connect_timeout,
+        },
     );
     let values: map<string, unknown> = {};
     for (let leaf in p.leaves) {

@@ -7,6 +7,13 @@ class RequestOptions {
         RequestOptions { request_timeout: null, connect_timeout: null }
     }
 
+    /// Options with only a total request deadline; `connect_timeout` is unbounded.
+    function from_request_timeout(
+        request_timeout: root.time.Duration,
+    ) -> RequestOptions throws never {
+        RequestOptions { request_timeout: request_timeout, connect_timeout: null }
+    }
+
     function with_request_timeout(
         self,
         request_timeout: root.time.Duration?,

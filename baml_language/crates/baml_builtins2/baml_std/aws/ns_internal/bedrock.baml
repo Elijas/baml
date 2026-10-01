@@ -1399,8 +1399,10 @@ function invoke(client: root.BedrockClient, input: ai.ModelTurnInput) -> ai.Mode
         "aws-bedrock",
         client.id(),
         capture_wire = client.capture_wire,
-        request_timeout = client.options.request_timeout,
-        connect_timeout = client.options.connect_timeout,
+        options = baml.http.RequestOptions {
+            request_timeout: client.options.request_timeout,
+            connect_timeout: client.options.connect_timeout,
+        },
     );
     let turn = parse_response(sent.value);
     ai.ModelTurn { ...turn, calls: [sent.call], model: client.model }
@@ -1627,6 +1629,8 @@ function decode_stream_batch(batch: string) -> ai.stream.Event[] {
             let event: ContentBlockDeltaEvent => {
                 if let text: string = event.delta?.text {
                     out.push(ai.stream.TextDelta { text: text });
+                } else if (event.delta?.toolUse != null || event.delta?.reasoningContent != null) {
+                    out.push(ai.stream.ContentSeen {});
                 }
                 null
             },
@@ -1708,10 +1712,10 @@ function invoke_stream(
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         request,
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(client.options.request_timeout)
-            .with_connect_timeout(client.options.connect_timeout),
-        first_event_timeout = client.options.time_to_first_token_timeout,
+        options = baml.http.RequestOptions {
+            request_timeout: client.options.request_timeout,
+            connect_timeout: client.options.connect_timeout,
+        },
         idle_timeout = client.options.idle_timeout,
     ) catch (e) {
         baml.errors.Io => _stream_open_failure(e),
@@ -1729,6 +1733,7 @@ function invoke_stream(
         },
         require_terminal = "aws-bedrock",
         model = client.model,
+        time_to_first_token_timeout = client.options.time_to_first_token_timeout,
     );
     let call = ai.events.LLMCall {
         client_name: client.id(),

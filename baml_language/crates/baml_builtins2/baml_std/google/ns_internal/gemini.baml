@@ -989,23 +989,17 @@ function _gm_route_sse_open(
 function _gm_open_sse(
     req: baml.http.Request,
     provider: string,
-    request_timeout_ms: int? = null,
     request_timeout: baml.time.Duration? = null,
-    time_to_first_token_timeout_ms: int? = null,
-    time_to_first_token_timeout: baml.time.Duration? = null,
     connect_timeout: baml.time.Duration? = null,
     idle_timeout: baml.time.Duration? = null,
 ) -> baml.http.SseStream {
     _gm_route_sse_open(provider, () -> {
         baml.http.fetch_sse(
             req,
-            options = baml.http.RequestOptions.new()
-                .with_request_timeout(
-                    request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-                )
-                .with_connect_timeout(connect_timeout),
-            first_event_timeout = time_to_first_token_timeout
-                ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
+            options = baml.http.RequestOptions {
+                request_timeout: request_timeout,
+                connect_timeout: connect_timeout,
+            },
             idle_timeout = idle_timeout,
         )
     })
@@ -1051,11 +1045,15 @@ function _gm_decode_batch(batch: string, provider: string) -> ai.stream.Event[] 
             for (let p in parts) {
                 if let t: string = p.text {
                     if (p.thought ?? false) {
+                        out.push(ai.stream.ContentSeen {});
                         null
                     } else {
                         out.push(ai.stream.TextDelta { text: t });
                         null
                     }
+                } else if (p.functionCall != null || p.inlineData != null || p.fileData != null) {
+                    out.push(ai.stream.ContentSeen {});
+                    null
                 } else {
                     null
                 };
@@ -1163,8 +1161,10 @@ function gemini_invoke(c: root.GeminiClient, input: ai.ModelTurnInput) -> ai.Mod
         "google",
         c.id(),
         capture_wire = c.capture_wire,
-        request_timeout = c.options.request_timeout,
-        connect_timeout = c.options.connect_timeout,
+        options = baml.http.RequestOptions {
+            request_timeout: c.options.request_timeout,
+            connect_timeout: c.options.connect_timeout,
+        },
     );
     let turn = parse(sent.value, seq);
     ai.ModelTurn { ...turn, calls: [sent.call], model: c.model }
@@ -1186,7 +1186,6 @@ function gemini_invoke_stream(
         req,
         "google",
         request_timeout = c.options.request_timeout,
-        time_to_first_token_timeout = c.options.time_to_first_token_timeout,
         connect_timeout = c.options.connect_timeout,
         idle_timeout = c.options.idle_timeout,
     );
@@ -1201,6 +1200,7 @@ function gemini_invoke_stream(
         },
         require_terminal = "google",
         model = c.model,
+        time_to_first_token_timeout = c.options.time_to_first_token_timeout,
     );
     let call = ai.events.LLMCall {
         client_name: c.id(),

@@ -106,24 +106,13 @@ function credential_sources(cred: root.Credential?, canonical_env: string?) -> s
 
 /// Send, classify non-2xx via `ai.errors.classify_http`, decode the body as T.
 /// T = json-shaped envelope class; unknown fields are ignored by the decoder.
-/// A null or non-positive timeout preserves the transport's unbounded default.
+/// `options` carries the transport deadlines, as in `baml.http.send`; null is unbounded.
 function send_as<T>(
     req: baml.http.Request,
     provider: string,
-    request_timeout_ms: int? = null,
-    connect_timeout: baml.time.Duration? = null,
-    request_timeout: baml.time.Duration? = null,
+    options: baml.http.RequestOptions? = null,
 ) -> T {
-    let timeout = match (request_timeout_ms) {
-        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
-        null => null,
-    };
-    let resp = baml.http.send(
-        req,
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(request_timeout ?? timeout)
-            .with_connect_timeout(connect_timeout),
-    ) catch_all (e) {
+    let resp = baml.http.send(req, options = options) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,
@@ -172,21 +161,10 @@ function send_as_with_wire<T>(
     provider: string,
     client_name: string,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
-    connect_timeout: baml.time.Duration? = null,
-    request_timeout: baml.time.Duration? = null,
+    options: baml.http.RequestOptions? = null,
 ) -> SentAs<T> {
     let started = baml.time.Instant.now();
-    let timeout = match (request_timeout_ms) {
-        let milliseconds: int => baml.time.Duration.from_milliseconds(milliseconds),
-        null => null,
-    };
-    let resp = baml.http.send(
-        req,
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(request_timeout ?? timeout)
-            .with_connect_timeout(connect_timeout),
-    ) catch_all (e) {
+    let resp = baml.http.send(req, options = options) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
             throw root.errors.NetworkFailure { status_code: null,

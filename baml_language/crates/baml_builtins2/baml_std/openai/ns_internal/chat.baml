@@ -1377,18 +1377,16 @@ function _chat_send(
     client_name: string,
     capture_wire: bool = true,
     audio_mime: string = "audio/wav",
-    request_timeout_ms: int? = null,
     request_timeout: baml.time.Duration? = null,
     connect_timeout: baml.time.Duration? = null,
 ) -> ai.ModelTurn {
     let started = baml.time.Instant.now();
     let response = baml.http.send(
         request,
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(
-                request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-            )
-            .with_connect_timeout(connect_timeout),
+        options = baml.http.RequestOptions {
+            request_timeout: request_timeout,
+            connect_timeout: connect_timeout,
+        },
     ) catch_all (e) {
         let timeout: baml.errors.Timeout => throw timeout,
         _ => {
@@ -1464,7 +1462,6 @@ function chat_invoke(
     params: ChatParams,
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
     request_timeout: baml.time.Duration? = null,
     connect_timeout: baml.time.Duration? = null,
 ) -> ai.ModelTurn {
@@ -1475,7 +1472,6 @@ function chat_invoke(
         chat_client_id(compat, params),
         capture_wire = capture_wire,
         audio_mime = _chat_audio_output_mime(params.request_body),
-        request_timeout_ms = request_timeout_ms,
         request_timeout = request_timeout,
         connect_timeout = connect_timeout,
     )
@@ -1597,6 +1593,11 @@ class ChatStreamDecoder {
                                 }
                             }
                             let deltas: CcToolCall[] = choice.delta?.tool_calls ?? [];
+                            // Reasoning and tool-call fragments are message
+                            // content with no TextDelta of their own.
+                            if (deltas.length() > 0 || (choice.delta?.reasoning_content ?? "") != "") {
+                                out.push(ai.stream.ContentSeen {});
+                            }
                             let position = 0;
                             for (let call in deltas) {
                                 self._absorb_call(call, position);
@@ -1685,7 +1686,6 @@ function chat_invoke_stream(
     params: ChatParams,
     input: ai.ModelTurnInput,
     capture_wire: bool = true,
-    request_timeout_ms: int? = null,
     request_timeout: baml.time.Duration? = null,
     connect_timeout: baml.time.Duration? = null,
     time_to_first_token_timeout_ms: int? = null,
@@ -1697,14 +1697,11 @@ function chat_invoke_stream(
     let started = baml.time.Instant.now();
     let sse = baml.http.fetch_sse(
         request,
-        first_event_timeout = time_to_first_token_timeout
-            ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
         idle_timeout = idle_timeout,
-        options = baml.http.RequestOptions.new()
-            .with_request_timeout(
-                request_timeout ?? baml.time.Duration.from_milliseconds(request_timeout_ms ?? 0),
-            )
-            .with_connect_timeout(connect_timeout),
+        options = baml.http.RequestOptions {
+            request_timeout: request_timeout,
+            connect_timeout: connect_timeout,
+        },
     ) catch_all (e) {
         _ => _chat_stream_open_failure(compat.provider, e),
     };
@@ -1722,6 +1719,8 @@ function chat_invoke_stream(
         },
         require_terminal = compat.provider,
         model = params.model,
+        time_to_first_token_timeout = time_to_first_token_timeout
+            ?? baml.time.Duration.from_milliseconds(time_to_first_token_timeout_ms ?? 0),
     );
     let call = ai.events.LLMCall {
         client_name: chat_client_id(compat, params),

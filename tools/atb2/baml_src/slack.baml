@@ -73,7 +73,7 @@ function slack_api(method: string, body: json?, query: string) -> json {
                 let b: json => baml.json.stringify(b),
             },
         },
-        timeout = baml.time.Duration.from_seconds(30),
+        options = baml.http.RequestOptions.from_request_timeout(baml.time.Duration.from_seconds(30)),
     ) catch (_) {
         _ => {
             throw SlackError { message: method + " failed" };

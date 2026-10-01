@@ -93,7 +93,7 @@ class BedrockClient {
     /// Record request/response bodies on the LLMCall wire records delivered
     /// through on_event. Status, headers, and timing are always recorded; this
     /// flag only gates the bodies.
-    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    /// Shared native HTTP deadlines. Null/non-positive values are unbounded.
     options: baml.ai.LlmClientOptions,
     capture_wire: bool,
 

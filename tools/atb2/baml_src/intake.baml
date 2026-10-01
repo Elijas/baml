@@ -123,7 +123,7 @@ function posthog_get(url: string, key: string, host: string) -> json {
             headers: { "Authorization": "Bearer " + key, "Accept": "application/json" },
             body: "",
         },
-        timeout = baml.time.Duration.from_seconds(30),
+        options = baml.http.RequestOptions.from_request_timeout(baml.time.Duration.from_seconds(30)),
     ) catch (_) {
         _ => {
             throw IntakeError { message: "posthog: request failed" };

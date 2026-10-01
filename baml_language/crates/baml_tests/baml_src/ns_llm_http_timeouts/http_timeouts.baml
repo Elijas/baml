@@ -8,95 +8,89 @@ function duration_options() -> bool {
     let duration = baml.time.Duration.from_milliseconds(1500);
     let clients = [
         openai.ResponsesClient.new(
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         openai.ChatClient.new(
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         openai.GenericClient.new(
             model = "offline",
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         openai.AzureClient.new(
             model = "offline",
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         openai.OpenRouterClient.new(
             model = "offline",
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         openai.OllamaClient.new(
             model = "offline",
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         anthropic.Client.new(
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         google.GeminiClient.new(
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         google.VertexClient.new(
-            options = baml.ai.LlmClientOptions.new()
-                .with_connect_timeout(duration)
-                .with_request_timeout(duration)
-                .with_time_to_first_token_timeout(duration)
-                .with_idle_timeout(duration),
-
+            options = baml.ai.LlmClientOptions {
+                connect_timeout: duration,
+                request_timeout: duration,
+                time_to_first_token_timeout: duration,
+                idle_timeout: duration,
+            },
         ),
         aws.BedrockClient.new(
             model = "offline",
             region = "us-east-1",
-            options = baml.ai.LlmClientOptions.new().with_connect_timeout(duration).with_request_timeout(
-                duration,
-            ),
-
+            options = baml.ai.LlmClientOptions { connect_timeout: duration, request_timeout: duration },
         ),
         typesafeai.Client.new(
             model = "offline",
-            options = baml.ai.LlmClientOptions.new().with_connect_timeout(duration).with_request_timeout(
-                duration,
-            ),
-
+            options = baml.ai.LlmClientOptions { connect_timeout: duration, request_timeout: duration },
         ),
     ];
     assert.equal(clients.length(), 11);
@@ -115,11 +109,10 @@ function responses_duration_request_timeout() -> string {
             let cl = openai.ResponsesClient.new(
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 5000,
-                options = baml.ai.LlmClientOptions.new()
-                    .with_request_timeout(baml.time.Duration.from_milliseconds(100))
-                    .with_connect_timeout(baml.time.Duration.from_milliseconds(1000)),
-
+                options = baml.ai.LlmClientOptions {
+                    request_timeout: baml.time.Duration.from_milliseconds(100),
+                    connect_timeout: baml.time.Duration.from_milliseconds(1000),
+                },
             );
             let spec = TimeoutSpec@spec();
             cl.invoke(
@@ -143,7 +136,7 @@ function responses_duration_request_timeout() -> string {
     )
 }
 
-test "duration_request_deadline_overrides_legacy_ms" {
+test "responses_duration_request_deadline" {
     assert.equal(responses_duration_request_timeout(), "timeout")
 }
 
@@ -157,44 +150,29 @@ function shared_chat_duration_deadlines() -> bool {
                 openai.ChatClient.new(
                     api_key = "test-key",
                     base_url = mock.base_url(),
-                    options = baml.ai.LlmClientOptions.new()
-                        .with_request_timeout(deadline)
-                        .with_connect_timeout(connect),
-
+                    options = baml.ai.LlmClientOptions { request_timeout: deadline, connect_timeout: connect },
                 ),
                 openai.GenericClient.new(
                     model = "offline",
                     base_url = mock.base_url(),
-                    options = baml.ai.LlmClientOptions.new()
-                        .with_request_timeout(deadline)
-                        .with_connect_timeout(connect),
-
+                    options = baml.ai.LlmClientOptions { request_timeout: deadline, connect_timeout: connect },
                 ),
                 openai.AzureClient.new(
                     model = "offline",
                     api_key = "test-key",
                     base_url = mock.base_url(),
-                    options = baml.ai.LlmClientOptions.new()
-                        .with_request_timeout(deadline)
-                        .with_connect_timeout(connect),
-
+                    options = baml.ai.LlmClientOptions { request_timeout: deadline, connect_timeout: connect },
                 ),
                 openai.OpenRouterClient.new(
                     model = "offline",
                     api_key = "test-key",
                     base_url = mock.base_url(),
-                    options = baml.ai.LlmClientOptions.new()
-                        .with_request_timeout(deadline)
-                        .with_connect_timeout(connect),
-
+                    options = baml.ai.LlmClientOptions { request_timeout: deadline, connect_timeout: connect },
                 ),
                 openai.OllamaClient.new(
                     model = "offline",
                     base_url = mock.base_url(),
-                    options = baml.ai.LlmClientOptions.new()
-                        .with_request_timeout(deadline)
-                        .with_connect_timeout(connect),
-
+                    options = baml.ai.LlmClientOptions { request_timeout: deadline, connect_timeout: connect },
                 ),
             ];
             let spec = TimeoutSpec@spec();
@@ -237,6 +215,9 @@ test "request_options_mutators_and_defaults" {
     let cleared = configured.with_request_timeout(null).with_connect_timeout(null);
     assert.equal(cleared.request_timeout, null);
     assert.equal(cleared.connect_timeout, null);
+    let request_only = baml.http.RequestOptions.from_request_timeout(duration);
+    assert.equal(request_only.request_timeout, duration);
+    assert.equal(request_only.connect_timeout, null);
 }
 
 test "llm_client_options_mutators_and_defaults" {

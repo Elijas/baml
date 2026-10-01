@@ -30,10 +30,9 @@ class ResponsesClient {
     // always safe — and a `Ref` keeps the secret out of the client value.
     api_key: ai.Credential?,
     base_url: ai.Credential?,
-    // Native request deadline, including a streaming response body. Null or a
-    // non-positive value is unbounded; browser/Wasm does not enforce it.
-    request_timeout_ms: int?,
-    // Native streaming deadline from SSE open until the first parsed event.
+    // Streaming deadline from SSE open until the first event carrying message
+    // content (text, reasoning, or a tool call); protocol preamble events do
+    // not count. Null or a non-positive value is unbounded.
     time_to_first_token_timeout_ms: int?,
 
     // --- typed request parameters (omitted from the body when null) --------
@@ -63,7 +62,8 @@ class ResponsesClient {
     headers: map<string, string>?,
     /// Extra URL query parameters, percent-encoded onto the endpoint.
     query_params: map<string, string>?,
-    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    /// Shared native HTTP deadlines; `time_to_first_token_timeout` overrides the legacy
+    /// `time_to_first_token_timeout_ms` field.
     options: baml.ai.LlmClientOptions,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
@@ -77,7 +77,6 @@ class ResponsesClient {
         model: string = "gpt-4o-mini",
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        request_timeout_ms: int? = null,
         time_to_first_token_timeout_ms: int? = null,
         temperature: float? = null,
         top_p: float? = null,
@@ -97,7 +96,6 @@ class ResponsesClient {
             model: model,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
             time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             temperature: temperature,
             top_p: top_p,

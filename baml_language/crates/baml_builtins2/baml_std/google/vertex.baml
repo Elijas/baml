@@ -37,10 +37,9 @@ class VertexClient {
     // Replaces the whole `…/publishers/google/models` prefix; the caller owns
     // the path from there on.
     base_url: ai.Credential?,
-    // Native request deadline, including a streaming response body. Null or a
-    // non-positive value is unbounded; browser/Wasm does not enforce it.
-    request_timeout_ms: int?,
-    // Native streaming deadline from SSE open until the first parsed event.
+    // Streaming deadline from SSE open until the first event carrying message
+    // content (text, reasoning, or a tool call); protocol preamble events do
+    // not count. Null or a non-positive value is unbounded.
     time_to_first_token_timeout_ms: int?,
 
     // ── passthrough (PLAN P0.3) ──────────────────────────────────────────
@@ -58,7 +57,8 @@ class VertexClient {
 
     safety_settings: SafetySetting[]?,
 
-    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    /// Shared native HTTP deadlines; `time_to_first_token_timeout` overrides the legacy
+    /// `time_to_first_token_timeout_ms` field.
     options: baml.ai.LlmClientOptions,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are
@@ -76,7 +76,6 @@ class VertexClient {
         credentials_file: string? = null,
         api_key: ai.Credential? = null,
         base_url: ai.Credential? = null,
-        request_timeout_ms: int? = null,
         time_to_first_token_timeout_ms: int? = null,
         request_body: baml.json.json? = null,
         headers: map<string, string>? = null,
@@ -99,7 +98,6 @@ class VertexClient {
             credentials_file: credentials_file,
             api_key: api_key,
             base_url: base_url,
-            request_timeout_ms: request_timeout_ms,
             time_to_first_token_timeout_ms: time_to_first_token_timeout_ms,
             request_body: request_body,
             headers: headers,

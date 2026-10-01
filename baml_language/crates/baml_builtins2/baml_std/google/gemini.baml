@@ -68,7 +68,7 @@ class GeminiClient {
     // Sent as `safetySettings`.
     safety_settings: SafetySetting[]?,
 
-    /// Shared native HTTP deadlines; these override legacy millisecond fields.
+    /// Shared native HTTP deadlines. Null/non-positive values are unbounded.
     options: baml.ai.LlmClientOptions,
     // Record request/response bodies (and raw SSE events) on the LLMCall wire
     // records delivered through on_event. Status, headers, and timing are

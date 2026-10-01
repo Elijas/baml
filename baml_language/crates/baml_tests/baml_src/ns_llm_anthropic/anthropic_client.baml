@@ -213,7 +213,7 @@ test "anthropic_request_shape" {
     assert.contains(got, "input=9")
 }
 
-function anthropic_request_timeout_ms() -> string {
+function anthropic_request_timeout() -> string {
     root.llm_mock.mock_json_serve(
         [root.llm_mock.MockResponse.ok(anth_canned_text("pong", "end_turn"))],
         (mock: root.llm_mock.MockJsonServer) -> {
@@ -221,20 +221,20 @@ function anthropic_request_timeout_ms() -> string {
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 20,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(20) },
             );
             let outcome = anth_invoke_label(cl, anth_turn_input(AnthMockPlain@spec())) catch_all (e) {
                 let timeout: baml.errors.Timeout => "Timeout",
                 _ => `other:${e.to_string()}`,
             };
-            `${cl.request_timeout_ms ?? -1}|${outcome}`
+            `${cl.options.request_timeout?.to_milliseconds() ?? -1n}|${outcome}`
         },
         response_delay_ms = 200,
     )
 }
 
-test "anthropic_request_timeout_ms" {
-    assert.equal(anthropic_request_timeout_ms(), "20|Timeout")
+test "anthropic_request_timeout" {
+    assert.equal(anthropic_request_timeout(), "20|Timeout")
 }
 
 // Typed first-class parameters lower into the typed request; `headers` are
@@ -669,7 +669,7 @@ function anthropic_stream_time_to_first_token_timeout_ms() -> string {
                 model = "claude-haiku-4-5",
                 api_key = "test-key",
                 base_url = mock.base_url(),
-                request_timeout_ms = 15000,
+                options = baml.ai.LlmClientOptions { request_timeout: baml.time.Duration.from_milliseconds(15000) },
                 time_to_first_token_timeout_ms = 20,
             );
             let outcome = anth_stream_value(cl) catch_all (e) {
@@ -684,6 +684,82 @@ function anthropic_stream_time_to_first_token_timeout_ms() -> string {
 
 test "anthropic_stream_time_to_first_token_timeout_ms" {
     assert.equal(anthropic_stream_time_to_first_token_timeout_ms(), "20|Timeout:20")
+}
+
+// TTFT runs to the first event carrying MESSAGE CONTENT, not the first SSE
+// event: `message_start` arrives at once and says nothing, and the mock then
+// holds the text delta for 10s, so only the 20ms TTFT can end this call.
+function anthropic_stream_ttft_ignores_preamble_events() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_event(
+                "message_start",
+                `{"type":"message_start","message":{"id":"m","model":"claude-haiku-4-5","usage":{"input_tokens":5}}}`,
+            ),
+            root.llm_mock.sse_event(
+                "content_block_delta",
+                `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"pong"}}`,
+            ),
+            root.llm_mock.sse_event("message_stop", `{"type":"message_stop"}`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                options = baml.ai.LlmClientOptions {
+                    time_to_first_token_timeout: baml.time.Duration.from_milliseconds(20),
+                },
+            );
+            anth_stream_value(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                _ => `other:${e.to_string()}`,
+            }
+        },
+        chunk_delay_ms = 10000,
+    )
+}
+
+test "anthropic_stream_ttft_ignores_preamble_events" {
+    assert.equal(anthropic_stream_ttft_ignores_preamble_events(), "Timeout:20")
+}
+
+// Reasoning is message content: a thinking delta satisfies TTFT even though it
+// yields no text. Events are 2s apart, so the text delta lands after the 1.5s
+// budget and the turn only completes because the thinking delta ended it.
+function anthropic_stream_ttft_counts_thinking() -> string {
+    root.llm_mock.mock_sse_serve(
+        [
+            root.llm_mock.sse_event(
+                "content_block_delta",
+                `{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hmm"}}`,
+            ),
+            root.llm_mock.sse_event(
+                "content_block_delta",
+                `{"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"pong"}}`,
+            ),
+            root.llm_mock.sse_event("message_stop", `{"type":"message_stop"}`),
+        ],
+        (mock: root.llm_mock.MockSseServer) -> {
+            let cl = anthropic.Client.new(
+                model = "claude-haiku-4-5",
+                api_key = "test-key",
+                base_url = mock.base_url(),
+                options = baml.ai.LlmClientOptions {
+                    time_to_first_token_timeout: baml.time.Duration.from_milliseconds(1500),
+                },
+            );
+            anth_stream_value(cl) catch_all (e) {
+                let timeout: baml.errors.Timeout => `Timeout:${timeout.duration_ms ?? -1}`,
+                _ => `other:${e.to_string()}`,
+            }
+        },
+        chunk_delay_ms = 2000,
+    )
+}
+
+test "anthropic_stream_ttft_counts_thinking" {
+    assert.equal(anthropic_stream_ttft_counts_thinking(), "pong")
 }
 
 // A connection that ends BEFORE `message_stop` is a truncated turn, not a
@@ -850,6 +926,8 @@ function anthropic_decode_tool_stream() -> string {
                 seen.push("done");
                 null
             },
+            // tool-call and thinking deltas: content, but nothing to deliver
+            let c: ai.stream.ContentSeen => null,
         };
     }
     let calls: string[] = [];
